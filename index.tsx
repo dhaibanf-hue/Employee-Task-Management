@@ -89,6 +89,53 @@ const App = () => {
   // --- State ---
   const [user, setUser] = useState<User | null>(null);
 
+  // Session Persistence & Inactivity Timeout
+  useEffect(() => {
+    const savedUser = localStorage.getItem('task_manager_user');
+    const lastActive = localStorage.getItem('task_manager_last_active');
+
+    if (savedUser && lastActive) {
+      const now = Date.now();
+      const diff = (now - parseInt(lastActive)) / (1000 * 60);
+      if (diff < 10) {
+        setUser(JSON.parse(savedUser));
+        localStorage.setItem('task_manager_last_active', now.toString());
+      } else {
+        localStorage.removeItem('task_manager_user');
+        localStorage.removeItem('task_manager_last_active');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const handleActivity = () => localStorage.setItem('task_manager_last_active', Date.now().toString());
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    const interval = setInterval(() => {
+      const lastActive = localStorage.getItem('task_manager_last_active');
+      if (lastActive && (Date.now() - parseInt(lastActive)) / (1000 * 60) >= 10) {
+        setUser(null);
+        localStorage.removeItem('task_manager_user');
+      }
+    }, 60000);
+    return () => {
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      clearInterval(interval);
+    };
+  }, [user]);
+
+  const updateSessionUser = (u: User | null) => {
+    setUser(u);
+    if (u) {
+      localStorage.setItem('task_manager_user', JSON.stringify(u));
+      localStorage.setItem('task_manager_last_active', Date.now().toString());
+    } else {
+      localStorage.removeItem('task_manager_user');
+    }
+  };
+
   // Data Store (Simulating DB)
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<User[]>([INITIAL_ADMIN]);
@@ -251,13 +298,13 @@ const App = () => {
       if (foundUser.disabled) {
         return alert('هذا الحساب معطل حالياً. يرجى مراجعة الإدارة.');
       }
-      setUser(foundUser);
+      updateSessionUser(foundUser);
     } else {
       alert('البريد الإلكتروني أو كلمة المرور غير صحيحة');
     }
   };
 
-  const handleLogout = () => setUser(null);
+  const handleLogout = () => updateSessionUser(null);
 
   if (!user) return <LoginPage onLogin={handleLogin} />;
 
@@ -274,7 +321,7 @@ const App = () => {
         <UserDashboard
           currentUser={user}
           onLogout={handleLogout}
-          data={{ assignments }}
+          data={{ assignments, taskDefs }}
           actions={{ setAssignments }}
         />
       )}
@@ -536,6 +583,7 @@ const AdminDashboard = ({ currentUser, onLogout, data, actions }: any) => {
 const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, setRoutines }: any) => {
   const [newRole, setNewRole] = useState('');
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', roleId: '', type: 'user' as UserType });
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   const addRole = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -592,6 +640,21 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
         await supabase.from('routines').update({ is_active: false }).eq('user_id', userId);
       }
     }
+  };
+
+  const updateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    const { error } = await supabase.from('users').update({
+      name: editingUser.name,
+      email: editingUser.email,
+      password: editingUser.password,
+      type: editingUser.type,
+      role_id: editingUser.roleId || null
+    }).eq('id', editingUser.id);
+
+    if (error) alert('خطأ في التعديل: ' + error.message);
+    else setEditingUser(null);
   };
 
   return (
@@ -740,17 +803,26 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
                       <span className="bg-blue-50/50 px-4 py-1.5 rounded-2xl text-xs font-black text-blue-700 border border-blue-50">{roles.find((r: Role) => r.id === u.roleId)?.name || 'بدون مسمى'}</span>
                     }
                   </td>
-                  <td className="p-5 text-center">
-                    <button
-                      onClick={() => toggleUserStatus(u.id)}
-                      className={`p-3 rounded-2xl transition-all shadow-sm border ${u.disabled
-                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
-                        : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100 hover:shadow-amber-100'
-                        }`}
-                      title={u.disabled ? "تفعيل" : "تعطيل"}
-                    >
-                      {u.disabled ? <Unlock size={18} /> : <Lock size={18} />}
-                    </button>
+                  <td className="p-5">
+                    <div className="flex justify-center gap-2">
+                      <button
+                        onClick={() => setEditingUser(u)}
+                        className="p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-100 transition-all"
+                        title="تعديل"
+                      >
+                        <FileText size={18} />
+                      </button>
+                      <button
+                        onClick={() => toggleUserStatus(u.id)}
+                        className={`p-3 rounded-2xl transition-all shadow-sm border ${u.disabled
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100'
+                          : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100 hover:shadow-amber-100'
+                          }`}
+                        title={u.disabled ? "تفعيل" : "تعطيل"}
+                      >
+                        {u.disabled ? <Unlock size={18} /> : <Lock size={18} />}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -758,6 +830,89 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
           </table>
         </div>
       </div>
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[100] p-6">
+          <div className="bg-white p-10 rounded-[2.5rem] w-full max-w-lg shadow-3xl animate-scale-in border border-white/20">
+            <div className="flex items-center gap-5 mb-8">
+              <div className="w-16 h-16 rounded-[2rem] bg-indigo-100 text-indigo-600 flex items-center justify-center shadow-inner">
+                <FileText size={32} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-black text-slate-900 leading-tight">تعديل بيانات الحساب</h3>
+                <p className="text-sm text-slate-500 font-bold">تحديث معلومات المستخدم والصلاحيات</p>
+              </div>
+            </div>
+
+            <form onSubmit={updateUser} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-2">الاسم</label>
+                  <input
+                    type="text"
+                    className="w-full premium-input font-bold"
+                    value={editingUser.name}
+                    onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-2">النوع</label>
+                  <select
+                    className="w-full premium-input font-bold"
+                    value={editingUser.type}
+                    onChange={e => setEditingUser({ ...editingUser, type: e.target.value as any })}
+                  >
+                    <option value="user">موظف</option>
+                    <option value="admin">مدير</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-2">البريد الإلكتروني</label>
+                <input
+                  type="email"
+                  className="w-full premium-input font-bold"
+                  value={editingUser.email}
+                  onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-2">كلمة المرور</label>
+                <input
+                  type="text"
+                  className="w-full premium-input font-bold"
+                  value={editingUser.password}
+                  onChange={e => setEditingUser({ ...editingUser, password: e.target.value })}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pr-2">التخصص/الدور</label>
+                <select
+                  className="w-full premium-input font-bold"
+                  value={editingUser.roleId || ''}
+                  onChange={e => setEditingUser({ ...editingUser, roleId: e.target.value })}
+                  disabled={editingUser.type === 'admin'}
+                >
+                  <option value="">-- اختر الدور --</option>
+                  {roles.map((r: Role) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </div>
+
+              <div className="flex gap-4 mt-10">
+                <button type="button" onClick={() => setEditingUser(null)} className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl transition-all font-black hover:bg-slate-200">إلغاء</button>
+                <button type="submit" className="flex-[2] bg-indigo-600 text-white py-4 rounded-2xl hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/20 font-black">حفظ التعديلات</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1029,18 +1184,39 @@ const AdminAssign = ({ taskDefs, users, roles, setAssignments, setRoutines }: an
                     className={`p-5 flex items-center justify-between cursor-pointer transition-colors ${expandedAssignTask === t.id ? 'bg-blue-50/30' : 'hover:bg-slate-50/50'}`}
                     onClick={() => setExpandedAssignTask(expandedAssignTask === t.id ? null : t.id)}
                   >
-                    <label className="flex items-center gap-4 font-black cursor-pointer text-slate-800 mb-0 flex-1" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-4 flex-1">
                       <div className="relative flex items-center">
                         <input
                           type="checkbox"
                           checked={selectedTasks.some(sel => sel.mainId === t.id && !sel.subId)}
-                          onChange={() => toggleTaskSelection(t.id)}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleTaskSelection(t.id);
+                          }}
                           className="peer h-6 w-6 cursor-pointer appearance-none rounded-lg border-2 border-slate-200 transition-all checked:border-blue-600 checked:bg-blue-600"
                         />
                         <CheckCircle className="absolute h-6 w-6 text-white scale-0 transition-transform peer-checked:scale-75 pointer-events-none" />
                       </div>
-                      <span className="text-sm">{t.name}</span>
-                    </label>
+                      <span className="text-sm font-black text-slate-800">{t.name}</span>
+                      {t.subTasks.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const allSelected = t.subTasks.every((st: any) => selectedTasks.some(sel => sel.mainId === t.id && sel.subId === st.id));
+                            if (allSelected) {
+                              setSelectedTasks(prev => prev.filter(sel => !(sel.mainId === t.id && sel.subId)));
+                            } else {
+                              const otherTasks = selectedTasks.filter(sel => !(sel.mainId === t.id && sel.subId));
+                              const allSubs = t.subTasks.map((st: any) => ({ mainId: t.id, subId: st.id }));
+                              setSelectedTasks([...otherTasks, ...allSubs]);
+                            }
+                          }}
+                          className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-md hover:bg-blue-200 transition-colors mr-2"
+                        >
+                          تحديد الكل
+                        </button>
+                      )}
+                    </div>
                     {t.subTasks.length > 0 && (
                       <div className={`transition-all duration-300 ${expandedAssignTask === t.id ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}>
                         <Menu size={18} />
@@ -1699,7 +1875,9 @@ const UserDailyTasks = ({ currentUser, assignments, setAssignments, today }: any
                         <div className="flex flex-col md:flex-row justify-between items-start gap-6 pb-6 border-b border-slate-50 last:border-0 last:pb-0">
                           <div className="flex-1 space-y-3">
                             <div className="flex items-center gap-3">
-                              <h4 className="font-black text-slate-800 text-base">{task.subTaskName || 'المهمة المطلوبة'}</h4>
+                              <h4 className="font-black text-slate-800 text-base">
+                                {task.subTaskName || task.mainTaskName}
+                              </h4>
                               <StatusBadge status={task.status} />
                               {task.isRoutine && <span className="text-[9px] font-black bg-purple-50 text-purple-600 px-2 py-1 rounded-lg border border-purple-100">روتين</span>}
                             </div>
