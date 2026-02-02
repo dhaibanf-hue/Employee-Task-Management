@@ -10,7 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // --- Supabase Configuration ---
 const SUPABASE_URL = 'https://jqlaitpirnyxwvwkowfz.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_zmV_C-ojOcbj5y5fJxfOqA_OXa9oqIL'; // Note: Ensure this is the correct Anon Key from settings
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpxbGFpdHBpcm55eHd2d2tvd2Z6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAwMjk2MDMsImV4cCI6MjA4NTYwNTYwM30.chqsFBRycbQv-njM9K4w1KWyYsOX6WnnEAkdiHccuco';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // --- Types ---
