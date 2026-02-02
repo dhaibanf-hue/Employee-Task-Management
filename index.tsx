@@ -101,44 +101,77 @@ const App = () => {
   // Initial Data Fetch
   useEffect(() => {
     const fetchData = async () => {
-      const { data: r } = await supabase.from('roles').select('*');
-      if (r) setRoles(r);
+      try {
+        const { data: r, error: rErr } = await supabase.from('roles').select('*');
+        if (rErr) throw rErr;
+        if (r) setRoles(r);
 
-      const { data: u } = await supabase.from('users').select('*');
-      if (u && u.length > 0) {
-        setUsers(u);
-      } else {
-        // First time setup - insert initial admin
-        await supabase.from('users').insert([INITIAL_ADMIN]);
-        setUsers([INITIAL_ADMIN]);
+        const { data: u, error: uErr } = await supabase.from('users').select('*');
+        if (uErr) throw uErr;
+
+        if (u && u.length > 0) {
+          setUsers(u.map(user => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            password: user.password,
+            type: user.type,
+            roleId: user.role_id,
+            disabled: user.disabled
+          })));
+        } else {
+          // First time setup - insert initial admin
+          const { error: insErr } = await supabase.from('users').insert([{
+            id: INITIAL_ADMIN.id,
+            name: INITIAL_ADMIN.name,
+            email: INITIAL_ADMIN.email,
+            password: INITIAL_ADMIN.password,
+            type: INITIAL_ADMIN.type
+          }]);
+          if (insErr) throw insErr;
+          setUsers([INITIAL_ADMIN]);
+        }
+
+        const { data: t, error: tErr } = await supabase.from('task_definitions').select('*');
+        if (tErr) throw tErr;
+        if (t) setTaskDefs(t.map(item => ({ ...item, subTasks: item.sub_tasks })));
+
+        const { data: a, error: aErr } = await supabase.from('assignments').select('*');
+        if (aErr) throw aErr;
+        if (aErr) {
+          console.error("Supabase Fetch Error (assignments):", aErr);
+          throw aErr;
+        }
+        if (a) setAssignments(a.map(item => ({
+          id: item.id,
+          userId: item.user_id,
+          mainTaskName: item.main_task_name,
+          subTaskName: item.sub_task_name,
+          date: item.date,
+          isRoutine: item.is_routine,
+          status: item.status,
+          userNote: item.user_note,
+          adminNote: item.admin_note,
+          submitted: item.submitted,
+          isManual: item.is_manual
+        })));
+
+        const { data: rt, error: rtErr } = await supabase.from('routines').select('*');
+        if (rtErr) {
+          console.error("Supabase Fetch Error (routines):", rtErr);
+          throw rtErr;
+        }
+        if (rt) setRoutines(rt.map(item => ({
+          id: item.id,
+          userId: item.user_id,
+          mainTaskName: item.main_task_name,
+          subTaskName: item.sub_task_name,
+          isActive: item.is_active
+        })));
+      } catch (error: any) {
+        console.error("Supabase Fetch Error:", error);
+        alert("خطأ في الاتصال بقاعدة البيانات: " + (error.message || "فشل الاتصال"));
       }
-
-      const { data: t } = await supabase.from('task_definitions').select('*');
-      if (t) setTaskDefs(t.map(item => ({ ...item, subTasks: item.sub_tasks })));
-
-      const { data: a } = await supabase.from('assignments').select('*');
-      if (a) setAssignments(a.map(item => ({
-        id: item.id,
-        userId: item.user_id,
-        mainTaskName: item.main_task_name,
-        subTaskName: item.sub_task_name,
-        date: item.date,
-        isRoutine: item.is_routine,
-        status: item.status,
-        userNote: item.user_note,
-        adminNote: item.admin_note,
-        submitted: item.submitted,
-        isManual: item.is_manual
-      })));
-
-      const { data: rt } = await supabase.from('routines').select('*');
-      if (rt) setRoutines(rt.map(item => ({
-        id: item.id,
-        userId: item.user_id,
-        mainTaskName: item.main_task_name,
-        subTaskName: item.sub_task_name,
-        isActive: item.is_active
-      })));
     };
 
     fetchData();
