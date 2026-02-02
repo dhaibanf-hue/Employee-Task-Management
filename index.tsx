@@ -1,3 +1,5 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { createRoot } from 'react-dom/client';
 import {
   Users, Briefcase, CheckSquare, Shield, LogOut, Plus,
   Calendar, FileText, AlertTriangle, CheckCircle, XCircle,
