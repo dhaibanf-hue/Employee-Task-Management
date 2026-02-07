@@ -66,7 +66,7 @@ type RoutineDefinition = {
 
 const INITIAL_ADMIN: User = {
   id: 'admin-1',
-  name: 'المدير العام',
+  name: 'المدير',
   email: 'dhaibanf@gmail.com',
   password: '1234',
   type: 'admin'
@@ -185,10 +185,6 @@ const App = () => {
 
         const { data: a, error: aErr } = await supabase.from('assignments').select('*');
         if (aErr) throw aErr;
-        if (aErr) {
-          console.error("Supabase Fetch Error (assignments):", aErr);
-          throw aErr;
-        }
         if (a) setAssignments(a.map(item => ({
           id: item.id,
           userId: item.user_id,
@@ -238,6 +234,17 @@ const App = () => {
       channels.forEach(channel => supabase.removeChannel(channel));
     };
   }, []);
+
+  // Keep logged-in user state synced with users list
+  useEffect(() => {
+    if (user && users.length > 0) {
+      const updatedMe = users.find(u => u.id === user.id);
+      if (updatedMe && JSON.stringify(updatedMe) !== JSON.stringify(user)) {
+        setUser(updatedMe);
+        localStorage.setItem('task_manager_user', JSON.stringify(updatedMe));
+      }
+    }
+  }, [users, user]);
 
   // Helper sync functions
   const syncRoles = async (newData: Role[]) => {
@@ -462,8 +469,7 @@ const LoginPage = ({ onLogin }: { onLogin: (e: React.FormEvent, email: string, p
             <Briefcase size={40} className="text-white" />
           </div>
           <h1 className="text-4xl font-black text-white tracking-tight mb-2 leading-tight">نظام إدارة المهام</h1>
-          <h2 className="text-2xl font-black text-red-500 mb-4">شركة توصيل ون</h2>
-          <p className="text-slate-400 text-base font-bold">سجل دخولك لتنظيم يومك وإنجاز مهامك</p>
+          <h2 className="text-2xl font-black text-red-500 mb-8">شركة توصيل ون</h2>
         </div>
 
         <div className="bg-[#111827]/80 backdrop-blur-xl p-8 rounded-[2rem] border border-white/5 shadow-2xl animate-scale-in">
@@ -572,7 +578,7 @@ const AdminDashboard = ({ currentUser, onLogout, data, actions }: any) => {
     <DashboardLayout
       sidebar={sidebarItems}
       content={renderContent()}
-      userName={`مرحباً، ${currentUser.name}`}
+      userName={`مرحبا، ${currentUser.name}`}
       onLogout={onLogout}
       title={getTitle()}
     />
@@ -625,7 +631,7 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
   };
 
   const toggleUserStatus = async (userId: string) => {
-    if (userId === 'admin-1') return alert('لا يمكن تعطيل حساب المدير العام الأساسي');
+    if (userId === 'admin-1' && users.find((u: User) => u.id === 'admin-1')?.name === 'المدير') return alert('لا يمكن تعطيل حساب المدير الرئيسي');
     const userToToggle = users.find((u: User) => u.id === userId);
     if (!userToToggle) return;
 
@@ -730,6 +736,7 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block pr-2">البريد الإلكتروني</label>
             <input
               type="email" placeholder="email@test.com" className="w-full premium-input font-mono text-sm" required
+              autoComplete="off"
               value={newUser.email} onChange={e => setNewUser({ ...newUser, email: e.target.value })}
             />
           </div>
@@ -771,10 +778,10 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
           <table className="w-full text-right bg-white">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="p-5 font-black text-slate-500 text-xs uppercase tracking-widest border-b border-slate-100">الموظف</th>
-                <th className="p-5 font-black text-slate-500 text-xs uppercase tracking-widest border-b border-slate-100">رتبة الوصول</th>
-                <th className="p-5 font-black text-slate-500 text-xs uppercase tracking-widest border-b border-slate-100">الدور</th>
-                <th className="p-5 font-black text-slate-500 text-xs uppercase tracking-widest border-b border-slate-100 text-center">التحكم</th>
+                <th className="p-5 font-black text-slate-600 text-xs uppercase tracking-widest border-b border-slate-100">الموظف</th>
+                <th className="p-5 font-black text-slate-600 text-xs uppercase tracking-widest border-b border-slate-100">رتبة الوصول</th>
+                <th className="p-5 font-black text-slate-600 text-xs uppercase tracking-widest border-b border-slate-100">الدور</th>
+                <th className="p-5 font-black text-slate-600 text-xs uppercase tracking-widest border-b border-slate-100 text-center">التحكم</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -792,7 +799,7 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
                     </div>
                   </td>
                   <td className="p-5">
-                    <span className={`px-4 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border ${u.type === 'admin' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-100'
+                    <span className={`px-4 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border ${u.type === 'admin' ? 'bg-indigo-50 text-indigo-900 border-indigo-200' : 'bg-slate-50 text-slate-800 border-slate-200'
                       }`}>
                       {u.type === 'admin' ? 'إدارة عليا' : 'موظف تنفيذ'}
                     </span>
@@ -875,6 +882,7 @@ const AdminUsers = ({ roles, users, assignments, routines, setRoles, setUsers, s
                 <input
                   type="email"
                   className="w-full premium-input font-bold"
+                  autoComplete="off"
                   value={editingUser.email}
                   onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
                   required
@@ -1197,7 +1205,7 @@ const AdminAssign = ({ taskDefs, users, roles, setAssignments, setRoutines }: an
                         />
                         <CheckCircle className="absolute h-6 w-6 text-white scale-0 transition-transform peer-checked:scale-75 pointer-events-none" />
                       </div>
-                      <span className="text-sm font-black text-slate-800">{t.name}</span>
+                      <span className="text-sm font-black text-slate-700">{t.name}</span>
                       {t.subTasks.length > 0 && (
                         <button
                           onClick={(e) => {
@@ -1211,7 +1219,7 @@ const AdminAssign = ({ taskDefs, users, roles, setAssignments, setRoutines }: an
                               setSelectedTasks([...otherTasks, ...allSubs]);
                             }
                           }}
-                          className="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded-md hover:bg-blue-200 transition-colors mr-2"
+                          className="text-[10px] bg-blue-100 text-blue-800 px-2 py-1 rounded-md hover:bg-blue-200 transition-colors mr-2 font-black"
                         >
                           تحديد الكل
                         </button>
@@ -1393,11 +1401,11 @@ const AdminAudit = ({ assignments, users, setAssignments }: any) => {
           <table className="w-full text-right bg-white">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="p-5 font-black text-slate-500 text-[10px] uppercase tracking-widest border-b border-slate-100">الموظف</th>
-                <th className="p-5 font-black text-slate-500 text-[10px] uppercase tracking-widest border-b border-slate-100">المهمة</th>
-                <th className="p-5 font-black text-slate-500 text-[10px] uppercase tracking-widest border-b border-slate-100">الحالة</th>
-                <th className="p-5 font-black text-slate-500 text-[10px] uppercase tracking-widest border-b border-slate-100">التبرير/الملاحظات</th>
-                <th className="p-5 font-black text-slate-500 text-[10px] uppercase tracking-widest border-b border-slate-100 text-center">الإجراء</th>
+                <th className="p-5 font-black text-slate-700 text-[10px] uppercase tracking-widest border-b border-slate-100">الموظف</th>
+                <th className="p-5 font-black text-slate-700 text-[10px] uppercase tracking-widest border-b border-slate-100">المهمة</th>
+                <th className="p-5 font-black text-slate-700 text-[10px] uppercase tracking-widest border-b border-slate-100">الحالة</th>
+                <th className="p-5 font-black text-slate-700 text-[10px] uppercase tracking-widest border-b border-slate-100">التبرير/الملاحظات</th>
+                <th className="p-5 font-black text-slate-700 text-[10px] uppercase tracking-widest border-b border-slate-100 text-center">الإجراء</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -1640,11 +1648,11 @@ const AdminReports = ({ assignments, users }: any) => {
             <div className="overflow-hidden rounded-3xl border border-slate-100">
               <table className="w-full text-right bg-white">
                 <thead>
-                  <tr className="bg-rose-50/50 text-rose-950">
-                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-100">الموظف المسؤول</th>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-100">المهمة المعنية</th>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-100">التاريخ</th>
-                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-100">ملاحظة المدير المستلم</th>
+                  <tr className="bg-rose-50 text-rose-950">
+                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-200">الموظف المسؤول</th>
+                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-200">المهمة المعنية</th>
+                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-200">التاريخ</th>
+                    <th className="p-5 font-black text-[10px] uppercase tracking-widest border-b border-rose-200">ملاحظة المدير المستلم</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
